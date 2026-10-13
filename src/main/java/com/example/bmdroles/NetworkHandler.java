@@ -10,7 +10,9 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.Optional;
 
 public final class NetworkHandler {
-    private static final String PROTOCOL = "1";
+    // Bumped to 2 in v1.1 (the sync packet now carries the easy mode flag).
+    // Server and clients must both run 1.1+.
+    private static final String PROTOCOL = "2";
 
     // "acceptMissingOr": clients / servers WITHOUT the mod can still connect.
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -35,6 +37,6 @@ public final class NetworkHandler {
         }
         Role role = RoleManager.get(player.getUUID());
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new RoleSyncPacket(role == null ? -1 : role.ordinal()));
+                new RoleSyncPacket(role == null ? -1 : role.ordinal(), RoleManager.isEasyMode()));
     }
 }

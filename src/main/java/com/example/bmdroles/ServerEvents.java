@@ -31,7 +31,8 @@ public final class ServerEvents {
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            RoleManager.refresh(player, true);
+            // only show the action bar message to players that actually have a role
+            RoleManager.refresh(player, RoleManager.get(player.getUUID()) != null);
         }
     }
 }

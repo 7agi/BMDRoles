@@ -3,7 +3,6 @@ package com.example.bmdroles;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -23,6 +22,7 @@ import java.util.UUID;
  * /bmd <players> <blind|deaf|mute|none>   assign a role to any number of players
  * /bmd rotate                             Blind -> Deaf -> Mute -> Blind for everyone who has a role
  * /bmd distribute                         spread the 3 roles evenly over all online players
+ * /bmd easymode [on|off]                  toggle easy mode (muffled / blurred instead of blocked)
  * /bmd clear                              remove all roles
  * /bmd list                               show who has which role
  */
@@ -45,6 +45,10 @@ public final class BmdCommand {
                 .then(targets)
                 .then(Commands.literal("rotate").executes(BmdCommand::rotate))
                 .then(Commands.literal("distribute").executes(BmdCommand::distribute))
+                .then(Commands.literal("easymode")
+                        .executes(ctx -> setEasyMode(ctx, !RoleManager.isEasyMode()))
+                        .then(Commands.literal("on").executes(ctx -> setEasyMode(ctx, true)))
+                        .then(Commands.literal("off").executes(ctx -> setEasyMode(ctx, false))))
                 .then(Commands.literal("clear").executes(BmdCommand::clear))
                 .then(Commands.literal("list").executes(BmdCommand::list)));
     }
@@ -57,6 +61,13 @@ public final class BmdCommand {
         String what = role == null ? "no role" : role.displayName();
         ctx.getSource().sendSuccess(() -> Component.literal("Set " + players.size() + " player(s) to " + what + "."), true);
         return players.size();
+    }
+
+    private static int setEasyMode(CommandContext<CommandSourceStack> ctx, boolean enabled) {
+        RoleManager.setEasyMode(ctx.getSource().getServer(), enabled);
+        ctx.getSource().sendSuccess(() -> Component.literal("Easy mode is now " + (enabled ? "ON" : "OFF")
+                + (enabled ? " (muffled / blurred)." : " (fully blind / deaf / mute).")), true);
+        return 1;
     }
 
     private static int rotate(CommandContext<CommandSourceStack> ctx) {
@@ -86,6 +97,9 @@ public final class BmdCommand {
 
     private static int list(CommandContext<CommandSourceStack> ctx) {
         MinecraftServer server = ctx.getSource().getServer();
+        boolean easy = RoleManager.isEasyMode();
+        ctx.getSource().sendSuccess(() -> Component.literal("Easy mode: " + (easy ? "ON" : "OFF")), false);
+
         Map<UUID, Role> all = RoleManager.snapshot();
         if (all.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal("Nobody has a role."), false);

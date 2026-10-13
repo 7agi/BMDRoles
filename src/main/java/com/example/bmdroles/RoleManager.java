@@ -36,9 +36,31 @@ public final class RoleManager {
         return get(id) == role;
     }
 
+    public static boolean isEasyMode() {
+        RoleData d = data;
+        return d != null && d.easyMode;
+    }
+
     public static Map<UUID, Role> snapshot() {
         RoleData d = data;
         return d == null ? new HashMap<>() : new HashMap<>(d.roles);
+    }
+
+    /** Turn easy mode (muffled / blurred instead of fully blocked) on or off for everybody. */
+    public static void setEasyMode(MinecraftServer server, boolean enabled) {
+        RoleData d = data;
+        if (d == null) {
+            return;
+        }
+        d.easyMode = enabled;
+        d.setDirty();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            NetworkHandler.sync(player);
+            if (get(player.getUUID()) != null) {
+                player.displayClientMessage(Component.literal("Easy mode is now " + (enabled ? "ON" : "OFF") + ".")
+                        .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.GOLD), true);
+            }
+        }
     }
 
     /** Set (or with null, remove) the role of a player. */

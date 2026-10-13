@@ -2,9 +2,10 @@ package com.example.bmdroles;
 
 import org.jetbrains.annotations.Nullable;
 
-/** The local player's role as told by the server. Contains no client-only classes on purpose. */
+/** The local player's role (and the server's easy mode flag). Contains no client-only classes on purpose. */
 public final class ClientRoleState {
     private static volatile Role role;
+    private static volatile boolean easyMode;
 
     private ClientRoleState() {
     }
@@ -16,5 +17,13 @@ public final class ClientRoleState {
 
     public static void set(@Nullable Role newRole) {
         role = newRole;
+    }
+
+    public static boolean isEasyMode() {
+        return easyMode;
+    }
+
+    public static void setEasyMode(boolean enabled) {
+        easyMode = enabled;
     }
 }
