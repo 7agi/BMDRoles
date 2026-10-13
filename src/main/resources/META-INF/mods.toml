@@ -1,0 +1,22 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="bmdroles"
+version="${mod_version}"
+displayName="Blind Deaf Mute"
+description='''
+Assign the roles Blind, Deaf and Mute to players with /bmd.
+Works with Simple Voice Chat (optional).
+'''
+# Server and client don't need matching versions; vanilla clients can still join
+# (they just won't get the Blind visuals / Deaf game-sound silencing).
+displayTest="IGNORE_ALL_VERSION"
+
+[[dependencies.bmdroles]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
