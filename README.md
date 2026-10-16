@@ -25,6 +25,9 @@ Off by default (everything works exactly like 1.0). With `/bmd easymode`:
 
 v1.1 changes the network protocol: update the server **and** the clients.
 
+## Client debug commands
+If the Blind view looks wrong: `/bmdclient status`, `/bmdclient fog off`, `/bmdclient shader off` (and `on` again) to find out which part is responsible.
+
 ## Build
 GitHub Actions builds on every push; the jar is in the run's *Artifacts*.
 Locally: `gradle build` (Gradle 8.8+, JDK 17) -> `build/libs/`.

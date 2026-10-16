@@ -4,22 +4,27 @@ import com.example.bmdroles.BmdRoles;
 import com.example.bmdroles.ClientRoleState;
 import com.example.bmdroles.Role;
 import com.mojang.blaze3d.shaders.FogShape;
+import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.material.FogType;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.client.event.ViewportEvent;
 import net.minecraftforge.client.event.sound.PlaySoundEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-/** Client-only effects: Blind visuals and Deaf game sounds. */
+/** Client-only effects: Blind visuals and Deaf game sounds (+ a few debug commands). */
 @Mod.EventBusSubscriber(modid = BmdRoles.MOD_ID, value = Dist.CLIENT)
 public final class ClientEvents {
     /** Normal mode: grayscale pixel grid + short view distance. */
@@ -29,9 +34,15 @@ public final class ClientEvents {
     private static final ResourceLocation BLIND_EASY_EFFECT =
             new ResourceLocation(BmdRoles.MOD_ID, "shaders/post/blind_easy.json");
 
-    /** How far (in blocks) a blind player can make anything out (normal mode). */
-    private static final float BLIND_FOG_FAR = 14.0F;
-    private static final float FOG_GRAY = 0.10F;
+    /** Normal mode fog (in blocks): clear up to FOG_NEAR, fully fogged at FOG_FAR. */
+    private static final float FOG_NEAR = 2.0F;
+    private static final float FOG_FAR = 24.0F;
+    /** Fog / sky color for blind players (mid-dark gray, NOT black). */
+    private static final float FOG_GRAY = 0.30F;
+
+    // debug switches, see /bmdclient
+    private static volatile boolean debugFog = true;
+    private static volatile boolean debugShader = true;
 
     private static PostChain blindChain;
     private static ResourceLocation activeEffect;
@@ -53,7 +64,7 @@ public final class ClientEvents {
         GameRenderer renderer = mc.gameRenderer;
 
         // ---- Blind: post effect (grid in normal mode, blur in easy mode) ----
-        boolean blind = role == Role.BLIND && mc.level != null;
+        boolean blind = role == Role.BLIND && mc.level != null && debugShader;
         if (blind) {
             ResourceLocation wanted = easy ? BLIND_EASY_EFFECT : BLIND_EFFECT;
             if (activeEffect != null && !activeEffect.equals(wanted)) {
@@ -67,7 +78,10 @@ public final class ClientEvents {
                 activeEffect = wanted;
                 blindChain = renderer.currentEffect();
                 if (blindChain == null) {
-                    retryCooldown = 200; // shader failed to load, don't spam
+                    BmdRoles.LOGGER.warn("Blind post effect {} FAILED to load, check the log above for the shader error", wanted);
+                    retryCooldown = 200; // don't spam
+                } else {
+                    BmdRoles.LOGGER.info("Blind post effect {} loaded", wanted);
                 }
             }
         } else if (activeEffect != null) {
@@ -95,19 +109,19 @@ public final class ClientEvents {
     /** Normal mode only: blind players only see what is close to them. */
     @SubscribeEvent
     public static void onRenderFog(ViewportEvent.RenderFog event) {
-        if (ClientRoleState.get() != Role.BLIND || ClientRoleState.isEasyMode()
+        if (!debugFog || ClientRoleState.get() != Role.BLIND || ClientRoleState.isEasyMode()
                 || event.getType() != FogType.NONE) {
             return; // keep vanilla water/lava/powder snow fog
         }
-        event.setNearPlaneDistance(0.0F);
-        event.setFarPlaneDistance(BLIND_FOG_FAR);
+        event.setNearPlaneDistance(FOG_NEAR);
+        event.setFarPlaneDistance(FOG_FAR);
         event.setFogShape(FogShape.SPHERE);
         event.setCanceled(true); // required for the values above to be used
     }
 
     @SubscribeEvent
     public static void onFogColor(ViewportEvent.ComputeFogColor event) {
-        if (ClientRoleState.get() != Role.BLIND || ClientRoleState.isEasyMode()) {
+        if (!debugFog || ClientRoleState.get() != Role.BLIND || ClientRoleState.isEasyMode()) {
             return;
         }
         event.setRed(FOG_GRAY);
@@ -141,5 +155,49 @@ public final class ClientEvents {
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientRoleState.set(null);
         ClientRoleState.setEasyMode(false);
+    }
+
+    // ------------------------------------------------------------------
+    // Debug commands (client side, work for everybody):
+    //   /bmdclient status
+    //   /bmdclient fog on|off      blind fog + fog color
+    //   /bmdclient shader on|off   blind post-processing shader
+    // ------------------------------------------------------------------
+    @SubscribeEvent
+    public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
+        event.getDispatcher().register(Commands.literal("bmdclient")
+                .then(Commands.literal("status").executes(ClientEvents::status))
+                .then(Commands.literal("fog")
+                        .then(Commands.literal("on").executes(ctx -> {
+                            debugFog = true;
+                            return say(ctx, "Blind fog: ON");
+                        }))
+                        .then(Commands.literal("off").executes(ctx -> {
+                            debugFog = false;
+                            return say(ctx, "Blind fog: OFF");
+                        })))
+                .then(Commands.literal("shader")
+                        .then(Commands.literal("on").executes(ctx -> {
+                            debugShader = true;
+                            return say(ctx, "Blind shader: ON");
+                        }))
+                        .then(Commands.literal("off").executes(ctx -> {
+                            debugShader = false;
+                            return say(ctx, "Blind shader: OFF");
+                        }))));
+    }
+
+    private static int status(CommandContext<CommandSourceStack> ctx) {
+        Minecraft mc = Minecraft.getInstance();
+        return say(ctx, "role=" + ClientRoleState.get()
+                + " easy=" + ClientRoleState.isEasyMode()
+                + " shaderLoaded=" + (mc.gameRenderer.currentEffect() != null)
+                + " activeEffect=" + activeEffect
+                + " fog=" + debugFog + " shader=" + debugShader);
+    }
+
+    private static int say(CommandContext<CommandSourceStack> ctx, String message) {
+        ctx.getSource().sendSuccess(() -> Component.literal(message), false);
+        return 1;
     }
 }

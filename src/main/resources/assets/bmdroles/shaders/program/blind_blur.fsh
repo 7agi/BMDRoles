@@ -7,7 +7,6 @@ uniform float Radius;
 uniform float Desaturate;
 
 in vec2 texCoord;
-in vec2 oneTexel;
 
 out vec4 fragColor;
 
