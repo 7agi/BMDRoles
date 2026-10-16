@@ -23,6 +23,7 @@ import net.minecraftforge.client.event.sound.PlaySoundEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.ModList;
 
 /** Client-only effects: Blind visuals and Deaf game sounds (+ a few debug commands). */
 @Mod.EventBusSubscriber(modid = BmdRoles.MOD_ID, value = Dist.CLIENT)
@@ -162,11 +163,16 @@ public final class ClientEvents {
     //   /bmdclient status
     //   /bmdclient fog on|off      blind fog + fog color
     //   /bmdclient shader on|off   blind post-processing shader
+    //   /bmdclient vanilla desaturate|blur|off   test a vanilla post effect
     // ------------------------------------------------------------------
     @SubscribeEvent
     public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("bmdclient")
                 .then(Commands.literal("status").executes(ClientEvents::status))
+                .then(Commands.literal("vanilla")
+                        .then(Commands.literal("desaturate").executes(ctx -> loadVanilla(ctx, "desaturate")))
+                        .then(Commands.literal("blur").executes(ctx -> loadVanilla(ctx, "blur")))
+                        .then(Commands.literal("off").executes(ClientEvents::unloadVanilla)))
                 .then(Commands.literal("fog")
                         .then(Commands.literal("on").executes(ctx -> {
                             debugFog = true;
@@ -189,11 +195,30 @@ public final class ClientEvents {
 
     private static int status(CommandContext<CommandSourceStack> ctx) {
         Minecraft mc = Minecraft.getInstance();
+        StringBuilder renderMods = new StringBuilder();
+        for (String id : new String[]{"oculus", "iris", "embeddium", "rubidium", "sodium", "canvas", "optifine"}) {
+            if (ModList.get().isLoaded(id)) {
+                renderMods.append(id).append(' ');
+            }
+        }
         return say(ctx, "role=" + ClientRoleState.get()
                 + " easy=" + ClientRoleState.isEasyMode()
                 + " shaderLoaded=" + (mc.gameRenderer.currentEffect() != null)
                 + " activeEffect=" + activeEffect
-                + " fog=" + debugFog + " shader=" + debugShader);
+                + " fog=" + debugFog + " shader=" + debugShader
+                + " renderMods=[" + renderMods.toString().trim() + "]");
+    }
+
+    /** Loads one of Minecraft's own post effects, to check whether post-processing works at all on this setup. */
+    private static int loadVanilla(CommandContext<CommandSourceStack> ctx, String name) {
+        GameRenderer renderer = Minecraft.getInstance().gameRenderer;
+        renderer.loadEffect(new ResourceLocation("minecraft", "shaders/post/" + name + ".json"));
+        return say(ctx, "Vanilla effect '" + name + "' loaded: " + (renderer.currentEffect() != null));
+    }
+
+    private static int unloadVanilla(CommandContext<CommandSourceStack> ctx) {
+        Minecraft.getInstance().gameRenderer.shutdownEffect();
+        return say(ctx, "Vanilla effect off");
     }
 
     private static int say(CommandContext<CommandSourceStack> ctx, String message) {
